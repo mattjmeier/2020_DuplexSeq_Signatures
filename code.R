@@ -271,10 +271,10 @@ ggplot(df, aes(Axis.1, Axis.2, color=Dose)) +
 
 # Binomial distance split CCA plot
 plot_ordination(ps,
-                ordinate(ps, method="CCA", distance="binomial"),
-                type="split",
+                ordinate(ps, method="NMDS", distance="binomial"),
+                type="biplot",
                 color="Dose",
-                title="Binomial distance, split CCA plot") 
+                title="Binomial distance, NMDS biplot") 
 
 # Manhattan distance, but with different ordination methods
 dist = "binomial"
@@ -294,7 +294,7 @@ pdataframe = plyr::ldply(plist, function(x){
 
 names(pdataframe)[1] = "method"
 
-# Plot for manhattant distance but various ordination methods
+# Plot for binomial distance but various ordination methods
 ggplot(pdataframe, aes(Axis_1, Axis_2, color=Dose)) +
   geom_point(size=4) +
   facet_wrap(~method, scales="free") +
