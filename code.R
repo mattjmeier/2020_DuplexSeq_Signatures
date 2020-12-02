@@ -2,7 +2,11 @@
 library(ggplot2)
 library(tidyverse)
 library(spgs)
+<<<<<<< HEAD
 library(MutationalPatterns)
+=======
+#library(MutationalPatterns)
+>>>>>>> 278631968a5d7ff4236980ec1fc63bb6cbe626c2
 #library(SomaticSignatures)
 library(deconstructSigs)
 library(phyloseq)
@@ -56,13 +60,19 @@ ps <- phyloseq(otu, tax, sampledata_ps)
 # Get distances metrics available
 dist_methods <- unlist(distanceMethodList)
 dist_methods <- dist_methods[-(1:3)]
+<<<<<<< HEAD
 dist_methods <- dist_methods[!dist_methods %in% c("cao","ANY")]
+=======
+>>>>>>> 278631968a5d7ff4236980ec1fc63bb6cbe626c2
 print(dist_methods)
 
 # Loop over various distance methods, ordinate, plot
 plist <- vector("list", length(dist_methods))
 for( i in dist_methods ){
+<<<<<<< HEAD
   message(i)
+=======
+>>>>>>> 278631968a5d7ff4236980ec1fc63bb6cbe626c2
   # Calculate distance matrix
   iDist <- phyloseq::distance(ps, method=i)
   # Calculate ordination
@@ -127,6 +137,7 @@ MutationalPatterns::plot_cosine_heatmap(pairwise_cosine_similarity)
 # Per mouse data ################################
 #################################################
 
+<<<<<<< HEAD
 sampledata <- read.table("./sampledata.txt", sep="\t", header=T, row.names=1)
 sampledata$Dose <- factor(sampledata$Dose)
 sampledata$sample <- row.names(sampledata)
@@ -149,6 +160,25 @@ per.nucleotide.data <- dplyr::left_join(per.nucleotide.data.all, sampledata)
 # trinucleotide_counts_per_dose <- per.nucleotide.data %>%
 #   group_by(context, subtype, Dose) %>%
 #   summarise(count = sum(final_somatic_alt_depth))
+=======
+per.nucleotide.data <- read.table("./VCFInformationMutationData_with_lacZ.txt", header=T, sep="\t")
+
+trinucleotide_frequencies_global <- per.nucleotide.data %>%
+  group_by(context, subtype) %>%
+  summarise(adjusted_depth_per_trinucleotide = sum(adjusted_depth))
+
+trinucleotide_frequencies_dose_group <- per.nucleotide.data %>%
+  group_by(context, subtype, Dose) %>%
+  summarise(adjusted_depth_per_trinucleotide = sum(adjusted_depth))
+
+trinucleotide_frequencies_per_mouse <- per.nucleotide.data %>%
+  group_by(context, subtype, sample) %>%
+  summarise(adjusted_depth_per_trinucleotide = sum(adjusted_depth))
+
+trinucleotide_counts_per_dose <- per.nucleotide.data %>%
+  group_by(context, subtype, Dose) %>%
+  summarise(count = sum(final_somatic_alt_depth))
+>>>>>>> 278631968a5d7ff4236980ec1fc63bb6cbe626c2
 
 ################
 # Clean up data:
@@ -160,6 +190,11 @@ per.nucleotide.data <- dplyr::left_join(per.nucleotide.data.all, sampledata)
 # Calculate depth for each sequence context and dose group
 # Calculate frequency for each mouse within each 96 trinucleotide mutation
 trinucleotide_frequencies_depth <- per.nucleotide.data %>%
+<<<<<<< HEAD
+=======
+  filter(variation_type=="snv") %>%
+  filter(!final_somatic_alt_depth==0) %>%
+>>>>>>> 278631968a5d7ff4236980ec1fc63bb6cbe626c2
   mutate(context = ifelse(subtype %in% c("G>T","G>A","G>C","A>T","A>C","A>G"),
                           mapply(function(x) spgs::reverseComplement(x, case="upper"), context),
                           context)) %>%
@@ -171,6 +206,7 @@ trinucleotide_frequencies_depth <- per.nucleotide.data %>%
   mutate(subtype = str_replace(subtype, "A>G", "T>C")) %>%
   mutate(context_with_mutation = paste0(str_sub(context, 1, 1),"[",subtype,"]",str_sub(context, 3, 3)) ) %>%
   group_by(context, Dose) %>%
+<<<<<<< HEAD
   mutate(group_depth = sum(informative_total_depth)) %>%
   ungroup() %>%
   group_by(context_with_mutation, sample) %>%
@@ -178,6 +214,13 @@ trinucleotide_frequencies_depth <- per.nucleotide.data %>%
   ungroup() %>%
   filter(variation_type=="snv") %>%
   filter(!final_somatic_alt_depth==0)
+=======
+  mutate(group_depth = sum(adjusted_depth)) %>%
+  ungroup() %>%
+  group_by(context_with_mutation, sample) %>%
+  mutate(frequency = (sum(final_somatic_alt_depth)/group_depth) ) %>%
+  ungroup()
+>>>>>>> 278631968a5d7ff4236980ec1fc63bb6cbe626c2
 
 # Convert table above to wide format
 trinucleotide_frequencies_wide <- trinucleotide_frequencies_depth %>%
@@ -203,6 +246,16 @@ trinucleotide_frequencies_proportions <- trinucleotide_frequencies_wide/rowSums(
 
 # No idea where their read depth is coming from.
 
+<<<<<<< HEAD
+=======
+# Questions
+# What is the NA dose group?
+# How do we arrive at counts - final somatic alt depth?
+# How is read depth calculated in other spreadsheet?
+# Repeated values for read depth in spreadsheet - seem to be by target sequence and dose group.
+
+
+>>>>>>> 278631968a5d7ff4236980ec1fc63bb6cbe626c2
 #################################
 # Per mouse re-analysis as above#
 #################################
@@ -230,6 +283,11 @@ otu = otu_table(trinucleotide_frequencies_proportions, taxa_are_rows = F)
 tax = as.matrix(colnames(trinucleotide_frequencies_proportions))
 rownames(tax) <- tax
 tax = tax_table(tax)
+<<<<<<< HEAD
+=======
+sampledata <- read.table("./sampledata.txt", sep="\t", header=T, row.names=1)
+sampledata$Dose <- factor(sampledata$Dose)
+>>>>>>> 278631968a5d7ff4236980ec1fc63bb6cbe626c2
 sampledata_ps <- sample_data(sampledata)
 # Put it together
 ps <- phyloseq(otu, tax, sampledata_ps)
@@ -237,7 +295,10 @@ ps <- phyloseq(otu, tax, sampledata_ps)
 # Get distances metrics available
 dist_methods <- unlist(distanceMethodList)
 dist_methods <- dist_methods[-(1:3)]
+<<<<<<< HEAD
 dist_methods <- dist_methods[!dist_methods %in% c("ANY")]
+=======
+>>>>>>> 278631968a5d7ff4236980ec1fc63bb6cbe626c2
 print(dist_methods)
 
 # Loop over various distance methods, ordinate, plot
@@ -268,7 +329,11 @@ ggplot(df, aes(Axis.1, Axis.2, color=Dose)) +
   facet_wrap(~distance, scales="free") +
   ggtitle("MDS on various distance metrics for Duplex Sequencing BaP Bone Marrow dataset")
 
+<<<<<<< HEAD
 # Binomial distance split NMDS plot
+=======
+# Binomial distance split CCA plot
+>>>>>>> 278631968a5d7ff4236980ec1fc63bb6cbe626c2
 plot_ordination(ps,
                 ordinate(ps, method="NMDS", distance="binomial"),
                 type="biplot",
@@ -317,6 +382,7 @@ signatures <- get_known_signatures()
 pairwise_cosine_similarity_sigs <- MutationalPatterns::cos_sim_matrix(t(trinucleotide_frequencies_proportions),
                                                                  signatures)
 
+<<<<<<< HEAD
 pheatmap::pheatmap(t(pairwise_cosine_similarity_sigs),
                    annotation=sampledata %>% select(Dose))
 
@@ -324,3 +390,6 @@ pheatmap::pheatmap(t(pairwise_cosine_similarity_sigs),
                    cluster_cols=F,
                    annotation=sampledata %>% select(Dose))
 
+=======
+pheatmap::pheatmap(t(pairwise_cosine_similarity_sigs), cluster_rows=F, annotation=sampledata %>% select(Dose))
+>>>>>>> 278631968a5d7ff4236980ec1fc63bb6cbe626c2
