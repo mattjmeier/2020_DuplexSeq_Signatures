@@ -139,36 +139,8 @@ bgzip -r
 per.nucleotide.data.all <- read.table(gzfile("./prj00068-20201202/mouse-processed-genome.mut.gz"), header=T, sep="\t")
 per.nucleotide.data <- dplyr::left_join(per.nucleotide.data.all, sampledata)
 
-# Useless.
-# gr <- makeGRangesFromDataFrame(per.nucleotide.data,
-#                                keep.extra.columns = T,
-#                                ignore.strand = T,
-#                                seqnames.field = "contig",
-#                                start.field = "Start",
-#                                end.field = "End")
-#
-# gr2 <- makeGRangesFromDataFrame(genic_regions,
-#                                 keep.extra.columns = T,
-#                                 seqnames.field = "Contig",
-#                                 start.field = "Start",
-#                                 end.field = "End")
-# 
-# union(gr, gr2)
-# findOverlaps(gr, gr2)
-# subsetByOverlaps(gr,gr2)
-
 per.nucleotide.data <- fuzzyjoin::genome_join(per.nucleotide.data, genic_regions, by=c("contig", "start", "end"), mode="inner")
 colnames(per.nucleotide.data)[1:3] <- c("contig","start","end")
-
-# per.nucleotide.data %>%
-#   mutate(found = map_chr(
-#     .x = number,
-#     .f = ~ if_else(
-#       condition = any(.x > tbl2$number1 & .x < tbl2$number2),
-#       true = "YES",
-#       false = NA_character_
-#     )
-#   ))
 
 # trinucleotide_frequencies_global <- per.nucleotide.data %>%
 #   group_by(context, subtype) %>%
@@ -216,8 +188,15 @@ trinucleotide_frequencies_depth <- per.nucleotide.data %>%
   filter(variation_type=="snv") %>%
   filter(!final_somatic_alt_depth==0)
 
-trinucleotide_frequencies_intergenic <- trinucleotide_frequencies_depth %>% filter(location_relative_to_genes=="intergenic")
-trinucleotide_frequencies_genic <- trinucleotide_frequencies_depth %>% filter(location_relative_to_genes=="genic")
+#################################################################
+# From this point on, we split the data into genic vs. intergenic
+#################################################################
+
+trinucleotide_frequencies_intergenic <- trinucleotide_frequencies_depth %>%
+  filter(location_relative_to_genes=="intergenic")
+
+trinucleotide_frequencies_genic <- trinucleotide_frequencies_depth %>%
+  filter(location_relative_to_genes=="genic")
 
 # Convert table above to wide format
 trinucleotide_frequencies_wide <- trinucleotide_frequencies_genic %>%
@@ -363,15 +342,176 @@ pheatmap::pheatmap(t(pairwise_cosine_similarity),
 # Cosine similarity between known signatures
 signatures <- get_known_signatures()
 
-mat <- mut_matrix(gr, "BSgenome.Mmusculus.UCSC.mm10")
-
 pairwise_cosine_similarity_sigs <- MutationalPatterns::cos_sim_matrix(t(trinucleotide_frequencies_proportions),
                                                                  signatures)
 
+
 pheatmap::pheatmap(t(pairwise_cosine_similarity_sigs),
+                   annotation=sampledata %>% select(Dose))
+
+#sorted <- dendextend::sort_dist_mat(pairwise_cosine_similarity_sigs) # Doesn't look better
+sorted <- dendsort::dendsort(hclust(as.dist(pairwise_cosine_similarity_sigs), method = "average"))
+pheatmap::pheatmap(t(pairwise_cosine_similarity_sigs),
+                   cluster_cols = sorted,
+                   cluster_rows = sorted,
                    annotation=sampledata %>% select(Dose))
 
 pheatmap::pheatmap(t(pairwise_cosine_similarity_sigs),
                    cluster_cols=F,
                    annotation=sampledata %>% select(Dose))
 
+################################################################
+# Shrunken Centroid Analysis
+################################################################
+library(pamr)
+library(heatmap3)
+
+################################################################
+# Training Set
+################################################################
+allDat <- as.matrix(t(trinucleotide_frequencies_proportions))
+trainSet <- allDat[,sampledata$Group %in% c("C", "H")]
+labels <- sampledata$Group[sampledata$Group %in% c("C", "H")]
+p <- rownames(allDat)
+
+################################################################
+# Shrinkage Estimation
+################################################################
+train.data <- list(x = as.matrix(trainSet), y = as.factor(labels),
+                   geneid=as.character(p), genenames=as.character(p))
+my.train <- pamr.train(train.data)
+
+################################################################
+# 6-fold Cross Validation (CV) (6 fold because min class size is 6)
+################################################################
+results <- pamr.cv(my.train, train.data)
+results
+
+#Call:
+
+#pamr.cv(fit = my.train, data = train.data)
+#   threshold nonzero errors
+#1  0.000     96      1    
+#2  0.146     75      1    
+#3  0.292     61      1    
+#4  0.438     50      1    
+#5  0.585     38      1    
+#6  0.731     30      1    
+#7  0.877     26      1    
+#8  1.023     23      1     
+#9  1.169     23      1    
+#10 1.315     21      1    
+#11 1.461     15      1    
+#12 1.607     13      1    
+#13 1.754     10      1    
+#14 1.900      9      1    
+#15 2.046      8      1    
+#16 2.192      6      1    
+#17 2.338      5      1    
+#18 2.484      5      1    
+#19 2.630      5      1    
+#20 2.777      5      1    
+#21 2.923      5      1    
+#22 3.069      3      1    
+#23 3.215      3      1    
+#24 3.361      3      1    
+#25 3.507      3      1    
+#26 3.653      3      1    
+#27 3.799      3      2    
+#28 3.946      2      4    
+#29 4.092      1      4    
+#30 4.238      0      4
+
+################################################################
+# Choosing the largest delta with the lowest number of errors based on the CV
+################################################################
+# 3 mutations
+cut <- 3.653
+pamr.confusion(my.train, threshold = cut)
+
+############################################################
+# Writing out the centroids
+################################################################
+gs <- pamr.listgenes(my.train, train.data,  threshold=cut)[,1]
+flag <- p %in% gs
+x <- trainSet[flag,]
+pp <- p[flag]
+td <- list(x = as.matrix(x), y = as.factor(labels), geneid=as.character(pp), genenames=as.character(pp))
+out <- pamr.train(td)
+classifier <- data.frame(ID = pp)
+classifier <- cbind.data.frame(classifier, out$centroids)
+names(classifier) <- c("ID", "Control.score", "BaP.score")
+classifier$std.dev <- out$sd
+
+write.table(classifier,
+            file="BaP Shunken Centroid Signature.txt", row.name = FALSE, col.name = TRUE, quote = FALSE, sep="\t")
+
+################################################################
+# Let's have a look at where the L and M groups get classified
+################################################################
+testDat <- cbind.data.frame(rownames(allDat), allDat)
+names(testDat)[1] <- "ID"
+testDat <- merge(classifier, testDat)
+
+################################################################
+#Predictions
+################################################################
+probBaP <- rep(0, ncol(testDat)-4)
+
+for(k in 1:length(probBaP)){
+  #Gausian Linear Discriminant Analysis
+  BaP <- sum(((testDat[,k+4] - testDat$BaP.score)/testDat$std.dev)^2) - 2*log(0.5)
+  Control <- sum(((testDat[,k+4] - testDat$Control.score)/testDat$std.dev)^2) - 2*log(0.5)
+  probBaP[k] <- 1/(1 + exp(BaP/2 - Control/2))
+}             
+
+################################################################
+#Heatmap
+################################################################
+heatDat <- as.matrix(testDat[,-c(1:4)])
+rownames(heatDat) <- as.character(testDat$ID)
+colnames(heatDat) <- as.character(sampledata$Group)
+reOrder <- c(grep("C", sampledata$Group), grep("H", sampledata$Group),
+             grep("L", sampledata$Group), grep("M", sampledata$Group))
+heatDat <- heatDat[,reOrder]
+probBaP <- probBaP[reOrder]
+
+##############################################################
+#Colours
+my.col <- matrix(rep("white", 2*ncol(heatDat)), ncol = 2)
+my.col[grep("C", colnames(heatDat)),1] <- "blue"
+my.col[grep("H", colnames(heatDat)),1] <- "red"
+
+flag <- probBaP > 0.9
+my.col[flag,2] <- "red"
+flag <- probBaP < 0.1
+my.col[flag,2] <- "blue"
+
+##############################################################
+#Row center based on the mean of the controls
+mn <- apply(heatDat[,1:6], 1, mean)
+heatDat <- heatDat - mn
+
+end.breaks <- c(0, 12, ncol(heatDat))
+y <- NULL
+my.col2 <- NULL
+g <- NULL
+col.blank <- rep(NA, nrow(heatDat))
+pp <- NULL
+
+for(k in 2:length(end.breaks)){
+  y <- cbind(y, heatDat[, (end.breaks[k-1]+1):end.breaks[k]], col.blank)
+  my.col2 <- rbind(my.col2, my.col[(end.breaks[k-1]+1):end.breaks[k],], c("white", "white"))
+  g <- c(g, colnames(heatDat)[(end.breaks[k-1]+1):end.breaks[k]], " ")
+}
+
+y <- y[,-ncol(y)]
+my.col2 <- my.col2[-nrow(my.col2),]
+g <- g[-length(g)]
+colnames(y) <- g
+
+colnames(my.col) <- c("Class", "Prediction")
+colnames(my.col2) <- c("Class", "Prediction")
+
+heatmap3(y, Rowv = NA, Colv = NA, scale = "none", margins = c(10, 10), main = "",
+         cexRow=1, cexCol=1, ColSideColors = my.col2)
