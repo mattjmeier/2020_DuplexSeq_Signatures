@@ -327,6 +327,14 @@ ordiplot(mds, type="n")
 orditorp(mds, display="sites",col="red",air=0.01)
 orditorp(mds, display="species",col="black",air=0.01)
 
+# Vegan package
+dist <- vegdist(trinucleotide_frequencies_proportions, method="binomial") # Could change distance here to others...
+nmds <- metaMDS(trinucleotide_frequencies_proportions, k=2)
+stressplot(nmds)
+ordiplot(nmds, type="n")
+orditorp(nmds, display="sites",col="red",air=0.01)
+orditorp(nmds, display="species",col="black",air=0.01)
+
 trinucleotide_frequencies_proportions.transposed <- t(trinucleotide_frequencies_proportions)
 dist_transposed <- vegdist(trinucleotide_frequencies_proportions.transposed, method="euclidean") # Could change distance here to others...
 df <- trinucleotide_frequencies_proportions.transposed
@@ -384,11 +392,30 @@ ggplot(df, aes(Axis.1, Axis.2, color=Dose)) +
   ggtitle("MDS on various distance metrics for Duplex Sequencing BaP Bone Marrow dataset")
 
 # Binomial distance split NMDS plot
+myord <- ordinate(ps, method="NMDS", distance="binomial")
 plot_ordination(ps,
-                ordinate(ps, method="NMDS", distance="binomial"),
+                myord,
                 type="biplot",
                 color="Dose",
-                title="Binomial distance, NMDS biplot") 
+                label="Group",
+                title="Binomial distance, NMDS biplot")
+
+ord_plot_data <- as.data.frame(myord$points) %>% 
+  tibble::rownames_to_column(var="Sample") %>%
+  dplyr::left_join(psmelt(ps))
+ord_plot_mutations <- as.data.frame(myord$species) %>%
+  tibble::rownames_to_column(var="Mutation Type")
+
+ord_plot_data$Group <- factor(ord_plot_data$Group, levels=c("C","L","M","H"))
+
+ggplot(ord_plot_mutations, aes(x=MDS1,y=MDS2)) +
+  geom_point() +
+  geom_point(data=ord_plot_data, aes(color=Group), size=4) +
+  geom_text(data=ord_plot_mutations %>% dplyr::filter(!between(MDS1, -20, 20)),
+            aes(label=`Mutation Type`),
+            nudge_y=-1) +
+  theme_bw()
+
 
 # Manhattan distance, but with different ordination methods
 dist = "binomial"
@@ -430,7 +457,7 @@ pheatmap::pheatmap(t(pairwise_cosine_similarity),
 # Cosine similarity between known signatures
 signatures <- get_known_signatures()
 
-pairwise_cosine_similarity_sigs <-/ MutationalPatterns::cos_sim_matrix(t(trinucleotide_frequencies_proportions),
+pairwise_cosine_similarity_sigs <- MutationalPatterns::cos_sim_matrix(t(trinucleotide_frequencies_proportions),
                                                                  signatures)
 
 
@@ -478,7 +505,8 @@ my.train <- pamr.train(train.data)
 results <- pamr.cv(my.train, train.data)
 results
 
-#Call:
+# Call:
+# threshold (delta)
 
 pamr.cv(fit = my.train, data = train.data)
 #   threshold nonzero errors
@@ -618,6 +646,8 @@ x <- tables_to_analyze[[1]]
 
 ```{r combine_results}
 <<convert_to_wide>>
+tnp_all <- trinucleotide_frequencies_proportions
+dist_all <- vegdist(tnp_all, method="binomial")
 <<main_analysis>>
 <<shrunken_centroid>>
 ```
@@ -630,6 +660,8 @@ x <- as.data.frame(tables_to_analyze[[2]])
 
 ```{r combine_results2}
 <<convert_to_wide>>
+tnp_intergenic <- trinucleotide_frequencies_proportions
+dist_intergenic <- vegdist(tnp_intergenic, method="binomial")
 <<main_analysis>>
 ```
 
@@ -641,7 +673,18 @@ x <- as.data.frame(tables_to_analyze[[3]])
 
 ```{r combine_results3}
 <<convert_to_wide>>
+tnp_genic <- trinucleotide_frequencies_proportions
+dist_genic <- vegdist(tnp_genic, method="binomial")
 <<main_analysis>>
+```
+
+
+## Mantel statistic
+
+```{r mantel}
+mantel(dist_all, tnp_genic)
+mantel(dist_all, tnp_intergenic)
+mantel(tnp_intergenic, tnp_genic)
 ```
 
 <div class="tocify-extend-page" data-unique="tocify-extend-page" style="height: 0;"></div>
