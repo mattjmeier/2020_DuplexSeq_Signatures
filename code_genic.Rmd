@@ -416,6 +416,23 @@ ggplot(ord_plot_mutations, aes(x=MDS1,y=MDS2)) +
             nudge_y=-1) +
   theme_bw()
 
+#C[C>A]C
+#G[C>A]C
+#C[C>A]A
+
+mut_types_of_interest <- ord_plot_mutations %>%
+              dplyr::filter(`Mutation Type` %in% c("C[C>A]C", "G[C>A]C", "C[C>A]A"))
+
+ggplot(ord_plot_mutations, aes(x=MDS1,y=MDS2)) +
+  geom_point(color="grey") +
+  geom_point(data=ord_plot_data, aes(color=Group), size=4) +
+  geom_text(data=mut_types_of_interest,
+            aes(label=`Mutation Type`),
+            nudge_y=-2, nudge_x=1,
+            size=3) +
+  geom_point(data=mut_types_of_interest) +
+  theme_bw()
+
 
 # Manhattan distance, but with different ordination methods
 dist = "binomial"
