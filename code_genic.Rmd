@@ -250,7 +250,10 @@ trinucleotide_frequencies_depth <- per.nucleotide.data %>%
   mutate(frequency = (sum(final_somatic_alt_depth)/group_depth) ) %>%
   ungroup() %>%
   filter(variation_type=="snv") %>%
-  filter(!final_somatic_alt_depth==0)
+  filter(!final_somatic_alt_depth==0) %>%
+  mutate(gc_content = (str_count(string = context, pattern = "G") + 
+                       str_count(string = context, pattern = "C"))
+                      /str_count(context))
 ```
 
 ## Split by genic and intergenic regions
@@ -313,7 +316,7 @@ trinucleotide_frequencies_proportions <- trinucleotide_frequencies_mut_matrix/ro
 ## Code chunk to run main analysis
 
 
-```{r main_analysis, eval=F, fig.height=10}
+```{r main_analysis, eval=F, fig.height=5}
 
 #################################
 # Per mouse re-analysis as above#
@@ -349,8 +352,10 @@ orditorp(mds_transposed, display="species",col="red",air=0.01)
 
 # Create phyloseq object
 otu = otu_table(trinucleotide_frequencies_proportions, taxa_are_rows = F)
-tax = as.matrix(colnames(trinucleotide_frequencies_proportions))
-rownames(tax) <- tax
+#tax = as.matrix(colnames(trinucleotide_frequencies_proportions))
+tax <- x %>% select(context_with_mutation,gc_content) %>% distinct()
+tax <- as.matrix(tax)
+rownames(tax) <- tax[,1]
 tax = tax_table(tax)
 sampledata_ps <- sample_data(sampledata)
 # Put it together
@@ -403,8 +408,16 @@ plot_ordination(ps,
 ord_plot_data <- as.data.frame(myord$points) %>% 
   tibble::rownames_to_column(var="Sample") %>%
   dplyr::left_join(psmelt(ps))
+
+gc_content_data <- ord_plot_data %>%
+  select(context_with_mutation,gc_content) %>%
+  mutate(Reference=substr(context_with_mutation, 3, 3)) %>%
+  distinct()
+
 ord_plot_mutations <- as.data.frame(myord$species) %>%
-  tibble::rownames_to_column(var="Mutation Type")
+  tibble::rownames_to_column(var="Mutation Type") %>%
+  dplyr::left_join(gc_content_data, by=c("Mutation Type"="context_with_mutation"))
+
 
 ord_plot_data$Group <- factor(ord_plot_data$Group, levels=c("C","L","M","H"))
 
@@ -424,15 +437,52 @@ mut_types_of_interest <- ord_plot_mutations %>%
               dplyr::filter(`Mutation Type` %in% c("C[C>A]C", "G[C>A]C", "C[C>A]A"))
 
 ggplot(ord_plot_mutations, aes(x=MDS1,y=MDS2)) +
-  geom_point(color="grey") +
+  geom_point(data=ord_plot_mutations, aes(shape=gc_content)) +
   geom_point(data=ord_plot_data, aes(color=Group), size=4) +
   geom_text(data=mut_types_of_interest,
             aes(label=`Mutation Type`),
             nudge_y=-2, nudge_x=1,
             size=3) +
-  geom_point(data=mut_types_of_interest) +
+  geom_point(data=mut_types_of_interest, shape=1, size=4) +
   theme_bw()
 
+ggplot(ord_plot_mutations, aes(x=MDS1,y=MDS2)) +
+  geom_point(data=ord_plot_mutations, aes(shape=gc_content)) +
+  geom_point(data=ord_plot_data, aes(color=Group), size=4) +
+  geom_text(data=mut_types_of_interest,
+            aes(label=`Mutation Type`),
+            nudge_y=-2, nudge_x=1,
+            size=3) +
+  geom_point(data=mut_types_of_interest, shape=1, size=4) +
+  theme_bw() +
+  facet_wrap(~gc_content)
+
+ggplot(ord_plot_mutations, aes(x=MDS1,y=MDS2)) +
+  geom_point(data=ord_plot_mutations, aes(shape=gc_content)) +
+  geom_point(data=ord_plot_data, aes(color=Group), size=4) +
+  geom_text(data=mut_types_of_interest,
+            aes(label=`Mutation Type`),
+            nudge_y=-2, nudge_x=1,
+            size=3) +
+  geom_point(data=mut_types_of_interest, shape=1, size=4) +
+  theme_bw() +
+  facet_grid(gc_content~Reference)
+
+nmdsplot <- ggplot(ord_plot_mutations, aes(x=MDS1,y=MDS2)) +
+  geom_point(data=ord_plot_data, aes(color=Group), size=4) +
+  geom_text(data=mut_types_of_interest,
+            aes(label=`Mutation Type`),
+            nudge_y=-2, nudge_x=1,
+            size=3) +
+  geom_point(data=mut_types_of_interest, shape=1, size=4) +
+  geom_point(data=ord_plot_mutations, aes(shape=gc_content)) +
+  theme_bw() +
+  coord_fixed() +
+  scale_shape(name = "Number of C/Gs in\ntarget sequence", labels=c("0","1","2","3")) +
+  #theme(legend.position = "bottom") +
+  facet_grid(~Reference)
+
+print(nmdsplot)
 
 # Manhattan distance, but with different ordination methods
 dist = "binomial"
@@ -666,6 +716,9 @@ x <- tables_to_analyze[[1]]
 tnp_all <- trinucleotide_frequencies_proportions
 dist_all <- vegdist(tnp_all, method="binomial")
 <<main_analysis>>
+pdf("./NMDS_binomial_all.pdf", width=11, height=5)
+print(nmdsplot)
+dev.off()
 <<shrunken_centroid>>
 ```
 
@@ -680,6 +733,9 @@ x <- as.data.frame(tables_to_analyze[[2]])
 tnp_intergenic <- trinucleotide_frequencies_proportions
 dist_intergenic <- vegdist(tnp_intergenic, method="binomial")
 <<main_analysis>>
+pdf("./NMDS_binomial_intergenic.pdf", width=11, height=5)
+print(nmdsplot)
+dev.off()
 ```
 
 ## Genic only
@@ -693,6 +749,9 @@ x <- as.data.frame(tables_to_analyze[[3]])
 tnp_genic <- trinucleotide_frequencies_proportions
 dist_genic <- vegdist(tnp_genic, method="binomial")
 <<main_analysis>>
+pdf("./NMDS_binomial_genic.pdf", width=11, height=5)
+print(nmdsplot)
+dev.off()
 ```
 
 
