@@ -14,7 +14,6 @@ author: "Matthew J. Meier"
 ```{r load_libraries, warning=F, echo=F}
 # Script to analyze distances between two dose groups of a chemical exposure using trinucleotide mutational patterns
 library(ggplot2)
-library(pheatmap)
 library(tidyverse)
 library(spgs)
 library(MutationalPatterns)
