@@ -16,6 +16,7 @@ author: "Matthew J. Meier"
 library(ggplot2)
 library(tidyverse)
 library(spgs)
+library(pheatmap)
 library(MutationalPatterns)
 #library(SomaticSignatures)
 library(deconstructSigs)
